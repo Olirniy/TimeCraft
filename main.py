@@ -1,8 +1,14 @@
-# Телеграмм-бот реализующий применения техники тайм-менеджмента для продуктивной деятельности. Ключевая особенность:
-# Два режима эксплуатации: 1 режим администрирования. 2 режим пользователя
-# Добавлена кнопка pause
-# Добавлена обработка сетевых ошибок (модифицирован блок запуска)
-# Налажена корректная отправка мотивационных сообщений
+# Телеграмм-бот реализующий применения техники тайм-менеджмента для продуктивной деятельности.
+#
+# Ключевая особенность:
+# Два режима эксплуатации: 1 - режим администрирования. 2 - режим пользователя.
+# Добавлена кнопка pause.
+# Добавлена обработка сетевых ошибок (модифицирован блок запуска).
+# Налажена корректная отправка мотивационных сообщений.
+# Налажен запуск каждой сессии в отдельном потоке:
+# (теперь используются потокобезопасные структуры данных для управления состояниями).
+# Добавлены проверки на существование потоков: теперь бот реализует возможность
+# обрабатывать запросы от множества пользователей одновременно без блокировок.
 
 
 import telebot
@@ -13,6 +19,7 @@ import json
 import random
 import datetime
 import time
+import threading
 
 # ====== Настройки ======
 [REDACTED] = '[REDACTED]'
@@ -29,6 +36,7 @@ stop_flags = {}
 pause_flags = {}
 pause_times = {}
 user_states = {}
+active_threads = {}
 
 
 # ====== Функции клавиатуры ======
@@ -171,8 +179,9 @@ def start_timecraft_session(message):
     chat_id = message.chat.id
     level = message.text.lower()
 
-    if chat_id in stop_flags and not stop_flags[chat_id]:
-        send_keyboard(chat_id, "Сначала остановите текущую сессию!")
+    # Проверяем, есть ли уже активный поток для этого пользователя
+    if chat_id in active_threads and active_threads[chat_id].is_alive():
+        send_keyboard(chat_id, "У вас уже есть активная сессия!")
         return
 
     if level not in TIMECRAFT_SETTINGS:
@@ -188,8 +197,32 @@ def start_timecraft_session(message):
     save_data()
 
     send_keyboard(chat_id, f"Старт {level} уровня!")
-    run_session_cycle(chat_id, level)
 
+    # Создаем и запускаем поток для сессии
+    session_thread = threading.Thread(
+        target=run_session_cycle,
+        args=(chat_id, level),
+        daemon=True  # Поток завершится при завершении основной программы
+    )
+    active_threads[chat_id] = session_thread
+    session_thread.start()
+
+
+def stop_timecraft_session(chat_id):
+    """Останавливает текущую сессию"""
+    if chat_id in stop_flags and not stop_flags[chat_id]:
+        stop_flags[chat_id] = True
+        if chat_id in pause_flags:
+            pause_flags[chat_id] = False
+
+        # Ожидаем завершения потока (но не более 2 секунд)
+        if chat_id in active_threads:
+            active_threads[chat_id].join(timeout=2)
+            del active_threads[chat_id]
+
+        send_keyboard(chat_id, "Сессия остановлена! Выберите уровень!")
+    else:
+        send_keyboard(chat_id, "Нет активной сессии")
 
 def run_session_cycle(chat_id, level):
     """Выполняет цикл сессий"""
