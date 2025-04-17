@@ -186,7 +186,7 @@ def start_timecraft_session(message):
 
     # Проверяем, есть ли уже активный поток для этого пользователя
     if chat_id in active_threads and active_threads[chat_id].is_alive():
-        send_keyboard(chat_id, "У вас уже есть активная сессия!")
+        send_keyboard(chat_id, "У вас уже есть активная сессия! Для смены уровня, сначала нажмите Stop")
         return
 
     if level not in TIMECRAFT_SETTINGS:
