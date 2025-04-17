@@ -9,6 +9,7 @@
 # (теперь используются потокобезопасные структуры данных для управления состояниями).
 # Добавлены проверки на существование потоков: теперь бот реализует возможность
 # обрабатывать запросы от множества пользователей одновременно без блокировок.
+# Реализовано безопасное хранение [REDACTED]
 
 
 import telebot
@@ -20,9 +21,15 @@ import random
 import datetime
 import time
 import threading
+from dotenv import load_dotenv
 
 # ====== Настройки ======
-[REDACTED] = '[REDACTED]'
+load_dotenv()  # Загружаем переменные окружения из .env файла
+
+[REDACTED] = os.getenv('[REDACTED]')
+if not [REDACTED]:
+    raise ValueError("Токен бота не найден! Создайте .env файл с [REDACTED]")
+
 ADMIN_CHAT_ID = None
 DATA_FILE = 'user_states.json'
 
@@ -36,8 +43,7 @@ stop_flags = {}
 pause_flags = {}
 pause_times = {}
 user_states = {}
-active_threads = {}
-
+active_threads = {}  # Для хранения активных потоков сессий
 
 # ====== Функции клавиатуры ======
 def create_keyboard():
@@ -72,7 +78,6 @@ def load_data():
             user_admin_mapping = data.get('user_admin_mapping', {})
             user_states = data.get('user_states', {})
         logging.info("Данные загружены")
-
 
 # ====== Основные обработчики ======
 @bot.message_handler(commands=['start'])
